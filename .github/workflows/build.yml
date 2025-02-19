@@ -6,7 +6,7 @@ on:
       - map_editor/**
       - sdk/**
       - server/**
-  pull_request:
+  pull_request_target:
     paths:
       - .github/workflows/build.yml
       - client/**
@@ -17,7 +17,7 @@ on:
 
 jobs:
   client-unity-build:
-    if: ${{ github.event_name != 'pull_request' }}
+    # if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
