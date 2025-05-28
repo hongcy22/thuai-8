@@ -2,10 +2,11 @@ using Thuai.Server.GameLogic;
 
 namespace Thuai.Server.Test.GameLogic;
 
+//Checked original tests 03/17/2025
 public class PlayerTests
 {
     [Fact]
-    public void Properties_DefaultValues_ReturnsCorrect()
+    public void Properties_DefaultValues_AreCorrect()
     {
         // Arrange.
         Player player = new("", 0);
@@ -28,11 +29,9 @@ public class PlayerTests
     public void Properties_SetValues_ReturnsCorrect()
     {
         // Arrange.
-        Player player = new("", 0);
+        Player player = new("token", 1);
 
         // Act.
-        player.Token = "token";
-        player.ID = 1;
         player.Speed = 1.0;
         player.TurnSpeed = 1.0;
         player.PlayerPosition = new();
@@ -56,15 +55,15 @@ public class PlayerTests
     {
         // Arrange.
         Player player = new("", 0);
-        player.PlayerArmor.armorValue = 10;
-        player.PlayerArmor.health = 10;
+        player.PlayerArmor.ArmorValue = 10;
+        player.PlayerArmor.Health = 10;
 
         // Act.
-        player.Injured(5);
+        player.Injured(5, false, out _);
 
         // Assert.
-        Assert.Equal(5, player.PlayerArmor.armorValue);
-        Assert.Equal(10, player.PlayerArmor.health);
+        Assert.Equal(5, player.PlayerArmor.ArmorValue);
+        Assert.Equal(10, player.PlayerArmor.Health);
     }
 
     [Fact]
@@ -72,15 +71,15 @@ public class PlayerTests
     {
         // Arrange.
         Player player = new("", 0);
-        player.PlayerArmor.armorValue = 5;
-        player.PlayerArmor.health = 10;
+        player.PlayerArmor.ArmorValue = 5;
+        player.PlayerArmor.Health = 10;
 
         // Act.
-        player.Injured(10);
+        player.Injured(10, false, out _);
 
         // Assert.
-        Assert.Equal(0, player.PlayerArmor.armorValue);
-        Assert.Equal(5, player.PlayerArmor.health);
+        Assert.Equal(0, player.PlayerArmor.ArmorValue);
+        Assert.Equal(5, player.PlayerArmor.Health);
     }
 
     [Fact]

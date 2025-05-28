@@ -6,6 +6,7 @@ using BattleCity;
 using UnityEngine.UIElements;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Runtime.CompilerServices;
 
 public class UpdatePositionCommand : AbstractCommand
 {
@@ -19,6 +20,7 @@ public class UpdatePositionCommand : AbstractCommand
         player = tank ?? throw new ArgumentNullException(nameof(tank)); ;
         bullet = null;
         positionDate = position;
+
     }
 
     public UpdatePositionCommand(BulletModel bullet, JToken position)
@@ -48,12 +50,12 @@ public class UpdatePositionCommand : AbstractCommand
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error parsing position data for tank or bullet: {ex.Message}");
+                Debug.LogError($"Error parsing position data for tank or bullet: {ex.Message}");
             }
         }
         else
         {
-            Console.WriteLine($"No position data found for tank or bullet");
+            Debug.LogWarning($"No position data found for tank or bullet");
         }
     }
 }

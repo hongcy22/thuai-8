@@ -14,22 +14,22 @@ namespace BattleCity
         public GameObject vertFence { get; set; }
         public GameObject horiFence { get; set; }
 
-        private GameObject createdWallObject; // 用于保存创建的墙体对象
+        public GameObject createdWallObject; // 用于保存创建的墙体对象
 
         private static readonly string[] horiWallPrefabNames =
         {
-            "horiWall00",
-            "horiWall01",
+            "horiWall00"
+            /*"horiWall01",
             "horiWall02",
             "horiWall03",
-            "horiWall04"
+            "horiWall04"*/
         };
 
         private static readonly string[] vertWallPrefabNames =
         {
-            "vertWall00",
-            "vertWall01",
-            "vertWall02"
+            "vertWall00"
+            /*"vertWall01",
+            "vertWall02"*/
         };
         public Wall(Position wallpos)
         {
@@ -37,7 +37,7 @@ namespace BattleCity
             AssignRandomHoriWall();
             AssignRandomVertWall();
             vertFence = Resources.Load<GameObject>("Prefabs/Wall/vertFence");
-            horiFence = Resources.Load<GameObject>("Prefabs/Wall/horiFence");
+            horiFence = Resources.Load<GameObject>("Prefabs/Wall/vertFence");
         }
 
         public Wall(double X, double Y, double Angle)
@@ -47,7 +47,7 @@ namespace BattleCity
             AssignRandomHoriWall();
             AssignRandomVertWall();
             vertFence = Resources.Load<GameObject>("Prefabs/Wall/vertFence");
-            horiFence = Resources.Load<GameObject>("Prefabs/Wall/horiFence");
+            horiFence = Resources.Load<GameObject>("Prefabs/Wall/vertFence");
         }
 
         public GameObject CreateWallObject()
@@ -55,17 +55,19 @@ namespace BattleCity
             GameObject wallController = GameObject.Find("WallController");
             if (wallPos.Angle == 90)
             {
-                Vector3 position = new Vector3((float)(wallPos.X + Constants.WALL_XBIAS), (float)(wallPos.Y + Constants.Y_BIAS), (float)(wallPos.Z ));
-                createdWallObject = Object.Instantiate(vertWall, position, Quaternion.identity);
-                createdWallObject.transform.SetParent(wallController.transform);
-                createdWallObject.transform.localScale *= 20f;
+                Vector3 position = new Vector3((float)(wallPos.X + Constants.WALL_XBIAS), (float)(wallPos.Y + Constants.Y_BIAS), (float)(wallPos.Z + Constants.WALL_ZFIX));
+                createdWallObject = Object.Instantiate(vertWall, wallController.transform);
+                createdWallObject.transform.localPosition = position;
+                createdWallObject.transform.localRotation = Quaternion.Euler(0, 90, 0);
+                createdWallObject.transform.localScale *= Constants.ZOOM;
             }
             else if (wallPos.Angle == 0)
             {
-                Vector3 position = new Vector3((float)(wallPos.X ), (float)(wallPos.Y + Constants.Y_BIAS), (float)(wallPos.Z + Constants.WALL_ZBIAS));
-                createdWallObject = Object.Instantiate(horiWall, position, Quaternion.identity);
-                createdWallObject.transform.SetParent(wallController.transform);
-                createdWallObject.transform.localScale *= 20f;
+                Vector3 position = new Vector3((float)(wallPos.X + Constants.WALL_XFIX), (float)(wallPos.Y + Constants.Y_BIAS), (float)(wallPos.Z + Constants.WALL_ZBIAS));
+                createdWallObject = Object.Instantiate(horiWall, wallController.transform);
+                createdWallObject.transform.localPosition = position;
+                createdWallObject.transform.localRotation = Quaternion.identity;
+                createdWallObject.transform.localScale *= Constants.ZOOM;
             }
             else
             {
@@ -78,16 +80,22 @@ namespace BattleCity
 
         public GameObject CreateFenceObject()
         {
-            Vector3 position = new Vector3((float)wallPos.X, (float)wallPos.Y, (float)wallPos.Z);
+            GameObject wallController = GameObject.Find("WallController");
             if (wallPos.Angle == 90)
             {
-                createdWallObject = Object.Instantiate(vertFence, position, Quaternion.identity);
-                createdWallObject.transform.localScale *= 20f;
+                Vector3 position = new Vector3((float)(wallPos.X + Constants.WALL_XBIAS), (float)(wallPos.Y + Constants.Y_BIAS), (float)(wallPos.Z + Constants.WALL_ZFIX));
+                createdWallObject = Object.Instantiate(vertFence, wallController.transform);
+                createdWallObject.transform.localPosition = position;
+                createdWallObject.transform.localRotation = Quaternion.Euler(0, 90, 0);
+                createdWallObject.transform.localScale *= Constants.ZOOM;
             }
             else if (wallPos.Angle == 0)
             {
-                createdWallObject = Object.Instantiate(horiFence, position, Quaternion.identity);
-                createdWallObject.transform.localScale *= 20f;
+                Vector3 position = new Vector3((float)(wallPos.X + Constants.WALL_XFIX), (float)(wallPos.Y + Constants.Y_BIAS), (float)(wallPos.Z + Constants.WALL_ZBIAS));
+                createdWallObject = Object.Instantiate(horiFence, wallController.transform);
+                createdWallObject.transform.localPosition = position;
+                createdWallObject.transform.localRotation = Quaternion.identity;
+                createdWallObject.transform.localScale *= Constants.ZOOM;
             }
             else
             {
@@ -96,6 +104,8 @@ namespace BattleCity
 
             return createdWallObject;
         }
+
+        
 
         public void RemoveWall()
         {

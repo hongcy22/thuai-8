@@ -2,15 +2,15 @@
 #ifndef _THUAI8_AGENT_AVAILABLE_BUFFS_HPP_
 #define _THUAI8_AGENT_AVAILABLE_BUFFS_HPP_
 
+#include <spdlog/fmt/bundled/format.h>
+
 #include <cstdint>
-#include <format>
 #include <magic_enum/magic_enum.hpp>
-#include <type_traits>
 #include <vector>
 
 namespace thuai8_agent {
 
-enum class SkillKind : std::uint8_t;  // Forward declaration
+enum class SkillKind : std::uint8_t;
 
 enum class BuffKind : std::uint8_t {
   BlackOut,
@@ -19,7 +19,7 @@ enum class BuffKind : std::uint8_t {
   Destroy,
   Construct,
   Trap,
-  Missile,
+  Recover,
   Kamui,
   BulletCount,
   BulletSpeed,
@@ -34,10 +34,7 @@ enum class BuffKind : std::uint8_t {
   Gravity
 };
 
-template <typename T, typename U>
-  requires(std::is_same_v<T, BuffKind> && std::is_same_v<U, SkillKind>) ||
-          (std::is_same_v<T, SkillKind> && std::is_same_v<U, BuffKind>)
-constexpr auto operator==(T lhs, U rhs) -> bool {
+constexpr auto operator==(BuffKind lhs, SkillKind rhs) -> bool {
   return static_cast<std::uint8_t>(lhs) == static_cast<std::uint8_t>(rhs);
 }
 
@@ -46,20 +43,9 @@ using AvailableBuffs = std::vector<BuffKind>;
 }  // namespace thuai8_agent
 
 template <>
-struct std::formatter<thuai8_agent::BuffKind> : std::formatter<std::string> {
-  template <class FormatContext>
-  auto format(thuai8_agent::BuffKind object, FormatContext& ctx) const {
-    return format_to(ctx.out(), "{}", magic_enum::enum_name(object));
-  }
-};
-
-template <>
-struct std::formatter<thuai8_agent::AvailableBuffs>
-    : std::formatter<std::string> {
-  template <class FormatContext>
-  auto format(const thuai8_agent::AvailableBuffs& object,
-              FormatContext& ctx) const {
-    return format_to(ctx.out(), "AvailableBuffs{}", object);
+struct fmt::formatter<thuai8_agent::BuffKind> : fmt::formatter<std::string> {
+  static auto format(thuai8_agent::BuffKind obj, format_context& ctx) {
+    return fmt::format_to(ctx.out(), "{}", magic_enum::enum_name(obj));
   }
 };
 

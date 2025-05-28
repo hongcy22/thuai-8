@@ -1,6 +1,6 @@
-using Serilog;
-using Thuai.Server.GameController;
+using nkast.Aether.Physics2D.Common;
 
+using Serilog;
 
 namespace Thuai.Server.GameLogic;
 
@@ -36,6 +36,8 @@ public partial class Battle(Utility.Config.GameSettings setting, List<Player> pl
     /// </summary>
     public int CurrentTick { get; private set; } = 0;
 
+    public int AwardChoosingTickLimit { get; init; } = 0;
+
     /// <summary>
     /// Current Stage of the battle.
     /// </summary>
@@ -46,12 +48,19 @@ public partial class Battle(Utility.Config.GameSettings setting, List<Player> pl
     /// </summary>
     public Utility.Config.GameSettings GameSettings { get; init; } = setting;
 
+    public bool IsBattleOver => _currentBattleTick > GameSettings.MaxBattleTicks || AlivePlayers() <= 1;
+
+    private int _currentAwardChoosingTick = 0;
+    private int _currentBattleTick = 0;
+
+    private readonly Physics.Environment _env = new();
+
+    private readonly Random _random = new();
     private readonly ILogger _logger =
         Utility.Tools.LogHandler.CreateLogger("Battle");
-
     private readonly object _lock = new();
 
-    #endregion 
+    #endregion
 
     #region Methods
     public Result GetResult()
@@ -74,19 +83,39 @@ public partial class Battle(Utility.Config.GameSettings setting, List<Player> pl
         _logger.Information("Initializing battle...");
         try
         {
-            bool success = GenerateMap();
-            if (!success)
+            lock (_lock)
             {
-                throw new Exception("Generate Map Failed");
+                bool success = GenerateMap();
+                if (!success)
+                {
+                    throw new Exception("Generate Map Failed.");
+                }
+
+                BindWall(Map?.Walls ?? throw new Exception("Map is null."));
+                _env.GenerateGrid(Map.Width, Map.Height);
+
+                foreach (Player player in AllPlayers)
+                {
+                    player.InitializeWith(
+                        _env.CreateBody(
+                            Physics.Environment.Categories.Player,
+                            Vector2.Zero,
+                            0f
+                        )
+                    );
+
+                    SubscribePlayerEvents(player);
+                }
+                ChooseSpawnpoint();
+                UpdateGravityFieldCoverage();
+                _logger.Information("Initialized battle successfully.");
+                return true;
             }
-            ChooseSpawnpoint();
-            _logger.Information("Initialized battle successfully.");
-            return true;
         }
         catch (Exception e)
         {
-            _logger.Error($"Initialize battle failed: {e.Message}");
-            _logger.Debug($"{e}");
+            _logger.Error($"Initialize battle failed:");
+            Utility.Tools.LogHandler.LogException(_logger, e);
             return false;
         }
     }
@@ -96,18 +125,38 @@ public partial class Battle(Utility.Config.GameSettings setting, List<Player> pl
     /// </summary>
     public void Tick()
     {
+        _logger.Debug($"Running tick {CurrentTick} in battle. Current stage: {Stage}.");
+
         try
         {
             lock (_lock)
             {
                 if (Stage == BattleStage.InBattle)
                 {
+                    RemoveOutsideObjects();
+
+                    ActivatedLasers.Clear();
+                    ActivateLasers(_lasersToActivate);
+                    _lasersToActivate.Clear();
+
+                    UpdatePlayerSpeed();
+
+                    _env.Step();
+
                     UpdatePlayers();
                     UpdateBullets();
+                    UpdateTraps();
                     UpdateMap();
-                    ++CurrentTick;
+
+                    ++_currentBattleTick;
+                }
+                else if (Stage == BattleStage.ChoosingAward)
+                {
+                    ActivatedLasers.Clear();    // To avoid recording error
+                    ++_currentAwardChoosingTick;
                 }
                 StageControl();
+                ++CurrentTick;
             }
         }
         catch (Exception e)
@@ -117,9 +166,43 @@ public partial class Battle(Utility.Config.GameSettings setting, List<Player> pl
         }
     }
 
-    public bool IsBattleOver()
+    private void RemoveOutsideObjects()
     {
-        return CurrentTick > GameSettings.MaxBattleTicks || AlivePlayers() <= 1;
+        if (Map is null)
+        {
+            throw new Exception("Map is null.");
+        }
+
+        foreach (Player player in AllPlayers)
+        {
+            if (!Map.IsInsideMap(player.PlayerPosition.Xpos, player.PlayerPosition.Ypos))
+            {
+                player.KillInstantly();
+                _logger.Warning($"Player {player.ID} is outside the map and killed.");
+            }
+        }
+
+        List<Bullet> bulletsToRemove = [];
+        foreach (Bullet bullet in Bullets)
+        {
+            if (!Map.IsInsideMap(bullet.BulletPosition.Xpos, bullet.BulletPosition.Ypos))
+            {
+                bulletsToRemove.Add(bullet);
+                _logger.Warning($"Bullet {bullet.Id} is outside the map and removed.");
+            }
+        }
+        RemoveBullet(bulletsToRemove);
+
+        List<Trap> trapsToRemove = [];
+        foreach (Trap trap in Traps)
+        {
+            if (!Map.IsInsideMap(trap.TrapPosition.Xpos, trap.TrapPosition.Ypos))
+            {
+                trapsToRemove.Add(trap);
+                _logger.Warning($"A trap is outside the map and removed.");
+            }
+        }
+        RemoveTrap(trapsToRemove);
     }
 
     /// <summary>
@@ -136,14 +219,24 @@ public partial class Battle(Utility.Config.GameSettings setting, List<Player> pl
         }
         else if (Stage == BattleStage.InBattle)
         {
-            if (IsBattleOver())
+            if (IsBattleOver)
             {
+                foreach (Player player in AllPlayers)
+                {
+                    UnsubscribePlayerEvents(player);
+                    player.LastChosenBuff = null;
+                }
+                Bullets.Clear();
+
                 Stage = BattleStage.ChoosingAward;
             }
         }
         else if (Stage == BattleStage.ChoosingAward)
         {
-            // TODO: implement.
+            if (_currentAwardChoosingTick >= AwardChoosingTickLimit)
+            {
+                Stage = BattleStage.Finished;
+            }
         }
         else /* Stage == BattleStage.Finished */
         {

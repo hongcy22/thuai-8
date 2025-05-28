@@ -19,8 +19,8 @@ public partial class AgentServer
 
             _socketMessageSendingQueue.AddOrUpdate(
                 socketId,
-                new ConcurrentQueue<Message>(),
-                (key, oldValue) => new ConcurrentQueue<Message>()
+                new ConcurrentQueue<Protocol.Messages.Message>(),
+                (key, oldValue) => new ConcurrentQueue<Protocol.Messages.Message>()
             );
 
             // Cancel the previous task if it exists
@@ -61,8 +61,8 @@ public partial class AgentServer
         }
         catch (Exception ex)
         {
-            _logger.Error($"Failed to add {GetAddress(socket)}: {ex.Message}");
-            _logger.Debug($"{ex}");
+            _logger.Error($"Failed to add {GetAddress(socket)}:");
+            Utility.Tools.LogHandler.LogException(_logger, ex);
         }
     }
 
@@ -89,8 +89,8 @@ public partial class AgentServer
         }
         catch (Exception ex)
         {
-            _logger.Error($"Failed to remove {GetAddress(socketId)}: {ex.Message}");
-            _logger.Debug($"{ex}");
+            _logger.Error($"Failed to remove {GetAddress(socketId)}:");
+            Utility.Tools.LogHandler.LogException(_logger, ex);
         }
     }
 
@@ -102,7 +102,7 @@ public partial class AgentServer
         }
         catch (Exception)
         {
-            return "[UNKNOWN]";
+            return $"[UNKNOWN](ID: {socket.ConnectionInfo.Id})";
         }
     }
 
@@ -116,12 +116,12 @@ public partial class AgentServer
             }
             else
             {
-                return "[UNKNOWN]";
+                return $"[UNKNOWN](ID: {socketId})";
             }
         }
         catch (Exception)
         {
-            return "[UNKNOWN]";
+            return $"[UNKNOWN](ID: {socketId})";
         }
     }
 }

@@ -1,5 +1,5 @@
 using Serilog;
-using Thuai.Server.GameController;
+using Thuai.Server.GameLogic.Buff;
 
 namespace Thuai.Server.GameLogic;
 
@@ -23,14 +23,24 @@ public partial class Game(Utility.Config.GameSettings gameSettings)
     /// </summary>
     public Utility.Config.GameSettings GameSettings { get; init; } = gameSettings;
 
+    public int CurrentTick { get; private set; } = 0;
+
     /// <summary>
     /// The current running battle.
     /// </summary>
     public Battle? RunningBattle { get; private set; } = null;
     public int BattleNumber { get; private set; } = 0;
+    public int AwardCount => GameSettings.BattleCount - 1;
     public GameStage Stage { get; private set; } = GameStage.Waiting;
-
     public int WaitingTick { get; private set; } = 0;
+    public List<Buff.Buff> AvailableBuffsBeforeCurrentBattle { get; private set; } = [];
+    public List<Buff.Buff> AvailableBuffsAfterCurrentBattle { get; private set; } = [];
+    public BuffSelector BuffSelector { get; private set; } = new();
+
+    public bool HasAwardBeforeBattle => BattleNumber > 0 && BattleNumber <= AwardCount;
+    public bool HasAwardAfterBattle => BattleNumber < AwardCount;
+
+    private readonly Random _random = new();
 
     private readonly ILogger _logger =
         Utility.Tools.LogHandler.CreateLogger("Game");
@@ -47,13 +57,12 @@ public partial class Game(Utility.Config.GameSettings gameSettings)
     {
         try
         {
-            // TODO:
-            // 1. Generate the order of awards.
+            _logger.Information("Game initialized.");
         }
         catch (Exception e)
         {
-            _logger.Error($"Failed to initialize the game: {e.Message}");
-            _logger.Debug($"{e}");
+            _logger.Error($"Failed to initialize the game:");
+            Utility.Tools.LogHandler.LogException(_logger, e);
         }
     }
 
@@ -67,19 +76,21 @@ public partial class Game(Utility.Config.GameSettings gameSettings)
     /// </remarks>
     public void Tick()
     {
+        _logger.Debug($"Running tick {CurrentTick}. Current stage: {Stage}.");
         try
         {
             lock (_lock)
             {
                 RunningBattle?.Tick();
                 StageControl();
-                // TODO: implement, but maybe not anymore?
+                ++CurrentTick;
             }
+            AfterGameTickEvent?.Invoke(this, new AfterGameTickEventArgs(this));
         }
         catch (Exception e)
         {
-            _logger.Error($"An exception occurred while ticking the game: {e.Message}");
-            _logger.Debug($"{e}");
+            _logger.Error($"An exception occurred while running tick {CurrentTick}:");
+            Utility.Tools.LogHandler.LogException(_logger, e);
         }
     }
 
@@ -101,15 +112,46 @@ public partial class Game(Utility.Config.GameSettings gameSettings)
         }
         else if (Stage == GameStage.PreparingGame)
         {
-            Initialize();
             Stage = GameStage.PreparingBattle;
         }
         else if (Stage == GameStage.PreparingBattle)
         {
+            if (HasAwardBeforeBattle)
+            {
+                // Have buffs before the current battle.
+                foreach (Player player in AllPlayers)
+                {
+                    if (player.LastChosenBuff is null)
+                    {
+                        // Select a buff for the player.
+                        BuffSelector.SelectBuff(player, _random.Next(1, BuffSelector.BUFF_KINDS + 1));
+                    }
+                    _logger.Information($"[Player {player.ID}] Last buff: {player.LastChosenBuff}.");
+                }
+            }
+
+            // Update available buffs
+            AvailableBuffsBeforeCurrentBattle = [.. AvailableBuffsAfterCurrentBattle];
+            if (HasAwardAfterBattle)
+            {
+                AvailableBuffsAfterCurrentBattle = [.. BuffSelector.ShowBuff(BattleNumber + 1)];
+            }
+            else
+            {
+                AvailableBuffsAfterCurrentBattle = [];
+            }
+
+            // Create new battle
             if (BattleNumber < GameSettings.BattleCount || NeedAdditionalBattle())
             {
-                RunningBattle = new Battle(GameSettings, AllPlayers);
+                RunningBattle = new Battle(GameSettings, AllPlayers)
+                {
+                    AwardChoosingTickLimit = GameSettings.AwardChooseTicks
+                };
+                RunningBattle.Initialize();
+
                 Stage = GameStage.InBattle;
+                _logger.Information($"Battle {BattleNumber} started.");
             }
             else
             {
@@ -120,7 +162,7 @@ public partial class Game(Utility.Config.GameSettings gameSettings)
         {
             if (RunningBattle is null)
             {
-                throw new Exception("Battle doesn't exist.");
+                throw new Exception($"Battle {BattleNumber} doesn't exist.");
             }
             else if (RunningBattle.Stage == Battle.BattleStage.Finished)
             {
@@ -142,6 +184,11 @@ public partial class Game(Utility.Config.GameSettings gameSettings)
 
     private bool NeedAdditionalBattle()
     {
+        if (BattleNumber >= GameSettings.BattleCount + GameSettings.MaxExtraBattleCount)
+        {
+            return false;
+        }
+
         return GetHighScorePlayer() == null;
     }
 

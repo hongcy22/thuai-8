@@ -15,7 +15,7 @@ This platform consists of several components:
 
 Checkout `README.md` in corresponding directories for usage of different components.
 
-Visit [the documentation site](https://thuai-8.thuasta.org) for details.
+Visit [the documentation site](https://thuasta.org/contests/THUAI8/) for details.
 
 ## Contributing
 
@@ -23,4 +23,5 @@ PRs accepted!
 
 ## License
 
-GPL-3.0-only © ASTA
+- Platform: GPL-3.0-only © ASTA
+- SDK: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication

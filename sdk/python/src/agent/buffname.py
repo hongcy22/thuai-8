@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class BuffName(Enum):
     BULLET_COUNT = "BULLET_COUNT"
     BULLET_SPEED = "BULLET_SPEED"
@@ -18,7 +19,7 @@ class BuffName(Enum):
     DESTROY = "DESTROY"
     CONSTRUCT = "CONSTRUCT"
     TRAP = "TRAP"
-    MISSILE = "MISSILE"
+    RECOVER = "RECOVER"
     KAMUI = "KAMUI"
 
     def __str__(self):

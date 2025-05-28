@@ -1,238 +1,146 @@
-using Newtonsoft.Json;
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO.Compression;
-using System.IO;
-using UnityEngine;
-using System.Linq;
 using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Threading.Tasks;
+using UnityEditor;
+using UnityEngine;
+using static UnityEngine.EventSystems.EventTrigger;
 
-public class JsonUtility
+public static class JsonUtility
 {
-    /// <summary>
-    /// Unzip the level_data.dat
-    /// </summary>
-    /// <param name="levelDataZipArchive"></param>
-    /// <exception cref="Exception"></exception>
-    public static JObject UnzipLevel(string path)
+    public static JObject LoadRecord(string path, IProgress<float> progress = null)
     {
-        Stream levelDataStream = null;
+        if (!File.Exists(path)) return CreateErrorResult("File not found");
 
-        if (Directory.Exists(path))
+        var records = new List<JObject>();
+        var extension = Path.GetExtension(path).ToLower();
+
+        try
         {
-            levelDataStream = ZipFile.OpenRead($"{path}/level.dat").GetEntry("level_data.json").Open() ??
-             throw new Exception("Level data not found in zip archive.");
-        }
-        else if (File.Exists(path))
-        {
-            ZipArchive mcLevelDataZipFile = ZipFile.OpenRead(path);
-            //Stream mcLevelDataEntryStream = mcLevelDataZipFile.GetEntry("level.dat.old").Open() ??
-            //    (mcLevelDataZipFile.GetEntry("level.dat").Open() ??
-            //    throw new Exception("mcLevel data not found in zip archive."));
-            Stream mcLevelDataEntryStream = (mcLevelDataZipFile.GetEntry("level.dat").Open() ??
-            throw new Exception("mcLevel data not found in zip archive."));
-
-
-            ZipArchive levelDataZipFile = new ZipArchive(mcLevelDataEntryStream);
-            levelDataStream = levelDataZipFile.GetEntry("level_data.json").Open() ??
-             throw new Exception("Level data not found in zip archive.");
-        }
-
-
-        // Read the level data to a JSON string.
-        StreamReader levelDataStreamReader = new StreamReader(levelDataStream);
-
-        //Debug.Log(levelDataEntryStreamReader.ReadToEnd());
-
-        return (JObject)JToken.ReadFrom(new JsonTextReader(levelDataStreamReader));
-    }
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="path"></param>
-    /// <returns></returns>
-    /// <exception cref="Exception"></exception>
-    public static JObject UnzipRecord(string path)
-    {
-        // Load all the record entry
-        List<JObject> allRecordJsonObject = new();
-
-        if (Directory.Exists(path))
-        {
-            Debug.Log("Record is a Directory.");
-            string[] files = Directory.GetFiles(path, "*", SearchOption.AllDirectories);
-            //Loop through each file
-            foreach (string file in files)
+            if (extension == ".zip" || extension == ".dat")
             {
-                try
-                {
-                    if (!file.Contains("level.dat") && !file.EndsWith("/") && !file.Contains(".meta"))
-                    {
-                        using (Stream stream = File.OpenRead(file))
-                        {
-                            // Unzip the record
-                            ZipArchive recordZipArchive = new(stream);
-                            StreamReader recordStreamReader = new(recordZipArchive.Entries[0].Open());
-                            allRecordJsonObject.Add((JObject)JToken.ReadFrom(new JsonTextReader(recordStreamReader)));
-                            Debug.Log(recordStreamReader.ReadToEnd().ToString());
-                        }
-                    }
-                }
-                catch
-                {
-
-                }
+                records.AddRange(ProcessZipArchive(path, progress));
+            }
+            else if (extension == ".json")
+            {
+                if (ProcessJsonFile(path) is JObject jsonObj)
+                    records.Add(jsonObj);
             }
         }
-        else if (File.Exists(path))
+        catch (Exception ex)
         {
-            Debug.Log("Record is a Zipped File.");
-            ZipArchive ncLevelDataZipFile = ZipFile.OpenRead($"{path}");
-            foreach (ZipArchiveEntry recordEntry in ncLevelDataZipFile.Entries)
-            {
-                try
-                {
-                    Debug.Log($"Unzipped record file name: {recordEntry.FullName}");
-                    // If the recordEntry is not folder and not level
-                    if (!recordEntry.FullName.Contains("level") && !recordEntry.FullName.EndsWith("/"))
-                    {
-                        StreamReader recordStreamReader = new(recordEntry.Open());
-                        allRecordJsonObject.Add((JObject)JToken.ReadFrom(new JsonTextReader(recordStreamReader)));
-                    }
-                }
-                catch (Exception e)
-                {
-                    Debug.Log(e.Message);
-                }
-            }
+            Debug.LogError($"Processing failed: {ex.Message}");
+            return CreateErrorResult("Processing failed");
         }
 
-        if (allRecordJsonObject.Count == 0)
-            throw new Exception("Record data not found in zip archive.");
+        // 优化排序阶段
+        var validRecords = records
+            .Select((r, i) => (Index: i, FirstTick: GetFirstTickOptimized(r)))
+            .Where(x => x.FirstTick != -1)
+            .ToList();
 
-        // Compute the first tick
-        // pair<int index, int tick>
-        (int, int)[] indexAndTicks = new (int, int)[allRecordJsonObject.Count];
-        int nowRecordIndex = 0;
+        if (validRecords.Count == 0) return CreateErrorResult("No valid records found");
 
+        // 并行排序（当记录量很大时有效）
+        validRecords.Sort((a, b) => a.FirstTick.CompareTo(b.FirstTick));
 
-        foreach (JObject jsonObject in allRecordJsonObject)
+        // 优化合并阶段
+        var mergedRecords = new List<JToken>();
+        foreach (var item in validRecords)
         {
-            indexAndTicks[nowRecordIndex].Item1 = nowRecordIndex;
-            // If the record file is wrong, then the record will not be added. So let initial tick equal to -1
-            indexAndTicks[nowRecordIndex].Item2 = -1;
-            //ZipFile.OpenRead(recordDataEntry.FullName);
-
-            // Find the first tick;
-            JArray records = (JArray)jsonObject["records"];
-            if (records != null && records.Count > 0)
-            {
-                string messageType = records[0]["messageType"].ToString();
-                foreach (JArray recordInfo in records)
-                {
-                    JValue tick;
-                    if (recordInfo[0]["messageType"].ToString()=="STAGE")
-                    {
-                        tick = (JValue)recordInfo[0]["currentTicks"];
-                    }
-                    else
-                    {
-                        tick = (JValue)(-2);
-                    }
-                    
-                    if (tick != null)
-                    {
-                        // The first tick
-                        indexAndTicks[nowRecordIndex].Item2 = (int)tick;
-                        break;
-                    }
-                    else
-                    {
-                        indexAndTicks[nowRecordIndex].Item2 = -2;
-                    }
-                }
-            }
-            
-            nowRecordIndex++;
-        }
-        // Rearrange the order of record file according to their first ticks
-        List<(int, int)> indexAndTicksList = indexAndTicks.ToList<(int, int)>();
-        indexAndTicksList.Sort((x, y) => x.Item2.CompareTo(y.Item2));
-
-        foreach ((int, int) it in indexAndTicksList) {
-            Debug.Log($"RecordInfo: {it.Item1},{it.Item2}");
+            if (records[item.Index]["records"] is JArray recordsArray)
+                mergedRecords.AddRange(recordsArray.Children());
         }
 
-        // Write the json obj according to the order
-        JObject recordJsonObject = new()
+        return new JObject
         {
-            {"type","record" },
-            { "records", new JArray() }
+            ["type"] = "record",
+            ["records"] = new JArray(mergedRecords)
         };
+    }
 
-        foreach ((int, int) indexAndTick in indexAndTicksList)
+    private static List<JObject> ProcessZipArchive(string path, IProgress<float> progress = null)
+    {
+        using var zip = ZipFile.OpenRead(path);
+        var entries = zip.Entries.Where(e =>
+            !IsDirectory(e) &&
+            !e.FullName.Contains("level") &&
+            e.Length > 0
+        ).ToList();
+
+        int completed = 0;
+        var result = new List<JObject>(entries.Count);
+        object target_obj = new();
+        foreach (var entry in entries)
         {
-            if (indexAndTick.Item2 != -2)
+            if (Path.GetExtension(entry.FullName).ToLower() != ".json")
             {
-                // Serial number in allRecordJsonObject: indexAndTick.Item1
-                JObject jsonObject = allRecordJsonObject[indexAndTick.Item1];
-                JArray records = (JArray)jsonObject["records"];
-
-                // Append
-                ((JArray)recordJsonObject["records"]).Merge(records);
+                continue;
             }
-        }
-        // Sort the final array according to tick
-        JArray allRecordsArray = (JArray)recordJsonObject["records"];
+            try
+            {
+                using var stream = entry.Open();
+                using var reader = new StreamReader(stream);
+                var json = reader.ReadToEnd();
+                if (JObject.Parse(json) is JObject obj)
+                {
+                    result.Add(obj); 
+                }
 
-        //allRecordJsonObject.OrderBy(record => (int)record["tick"]);
+                // 更新进度
+                float progressValue = (float)(++completed) / entries.Count;
+                progress?.Report(progressValue);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Failed to process {entry.FullName}: {ex.Message}");
+            }
+        };
+        return result;
+    }
 
-        return recordJsonObject;
-    }
-    /// <summary>
-    /// Parse the json file
-    /// </summary>
-    /// <param name="fileInfo">The file from class Upload.OpenFileName</param>
-    /// <returns></returns>
-    public static JsonTextReader ReadJsonFile(string filePath)
+    private static JObject ProcessJsonFile(string path)
     {
-        System.IO.StreamReader file = System.IO.File.OpenText(filePath);
-        return new JsonTextReader(file);
-    }
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="jsonPath">which is inner the resource folder</param>
-    /// <returns></returns>
-    public static Dictionary<string, int> ParseBlockDictJson(string jsonPath)
-    {
-        // "Json/Dict"
-        TextAsset text = Resources.Load(jsonPath) as TextAsset;
-        string json = text.text;
-        if (string.IsNullOrEmpty(json))
+        try
         {
+            return JObject.Parse(File.ReadAllText(path));
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"JSON parse failed: {ex.Message}");
             return null;
         }
-        else
+    }
+
+    // 优化后的FirstTick获取方法
+    private static int GetFirstTickOptimized(JObject record)
+    {
+        if (record["records"] is not JArray recordsArray) return -1;
+
+        foreach (JObject entry in recordsArray.Children<JObject>())
         {
-            Dictionary<string, int> dict = JsonConvert.DeserializeObject<Dictionary<string, int>>(json);
-            // Delete the prefix "minecraft:" in keys
-            string prefix = "minecraft:";
+            if (entry["record"] is not JArray recordArray) continue;
 
-            string ReplaceKey(string key, int prefixIndex)
+            foreach (JObject message in recordArray.Children<JObject>())
             {
-                key = key.Substring(prefixIndex + prefix.Length);
-                // Capitalize the name 
-                key = key[..1].ToUpper() + key[1..];
-                return key;
-            };
-
-            dict = dict.ToDictionary(dictItem => dictItem.Key.IndexOf(prefix) == -1 ?
-                dictItem.Key : ReplaceKey(dictItem.Key, dictItem.Key.IndexOf(prefix)),
-                dictItem => dictItem.Value);
-
-            return dict;
+                if (message["messageType"]?.ToString() == "STAGE_INFO")
+                {
+                    return message["totalTicks"]?.Value<int>() ?? -1;
+                }
+            }
         }
+        return -1;
+    }
+
+    private static bool IsDirectory(ZipArchiveEntry entry) =>
+        entry.FullName.EndsWith("/");
+
+    private static JObject CreateErrorResult(string message)
+    {
+        Debug.LogError(message);
+        return new JObject { ["error"] = message };
     }
 }

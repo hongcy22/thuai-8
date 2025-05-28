@@ -40,7 +40,6 @@ public class UpdateMapCommand : AbstractCommand
         UpdateFences();
         UpdateTraps();
         ShowLaser();
-
     }
 
     private void UpdateWalls()
@@ -55,23 +54,28 @@ public class UpdateMapCommand : AbstractCommand
                       
             Position position = new Position(x, y, angle);
             currentWalls.Add(position);
-            
-            var existingWall = map.CityWall.FirstOrDefault(w => w.wallPos == position);
+
+            var existingWall = map.CityWall.FirstOrDefault(w => w.wallPos.Equals(position));
 
             if (existingWall == null)
             { 
                 map.UpdateWall(position);
             }            
         }
+
         // delete wall
+        List<Wall> toDelete = new();
         foreach (Wall wall in map.CityWall)
         {
             if (!currentWalls.Contains(wall.wallPos))
             {
-                map.RemoveWall(wall);
+                toDelete.Add(wall);
             }
         }
-        // map.CityWall.RemoveAll(w => !currentWalls.Contains(w.wallPos));
+        foreach (var wall in toDelete)
+        {
+            map.RemoveWall(wall);
+        }
     }
 
     private void UpdateFences()
@@ -97,13 +101,18 @@ public class UpdateMapCommand : AbstractCommand
         }
 
         // delete the fence
+        List<Wall> toDelete = new();
         foreach (Wall wall in map.CityFence)
         {
             if (!currentFences.Contains(wall.wallPos))
             {
-                map.RemoveFence(wall);
+                toDelete.Add(wall);
             }
-        }        
+        }
+        foreach (Wall wall in toDelete)
+        {
+            map.RemoveFence(wall);
+        }
     }
 
     private void UpdateTraps()
@@ -135,18 +144,23 @@ public class UpdateMapCommand : AbstractCommand
         }
 
         // delete the fence
+        List<Trap> toDelete = new();
         foreach (Trap trap in map.Traps)
         {
             if (!currentTraps.Contains(trap.trapPos))
             {
-                map.RemoveTrap(trap);
+                toDelete.Add(trap);
             }
+        }
+        foreach (Trap trap in toDelete)
+        {
+            map.RemoveTrap(trap);
         }
     }
 
     private void ShowLaser()
     {
-        foreach(JToken laserData in laser)
+        foreach (JToken laserData in laser)
         {
             JToken startData = laserData["start"];
             JToken endData = laserData["end"];

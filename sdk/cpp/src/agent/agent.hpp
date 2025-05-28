@@ -5,8 +5,8 @@
 #include <hv/Event.h>
 #include <hv/EventLoop.h>
 #include <hv/WebSocketClient.h>
+#include <spdlog/fmt/bundled/format.h>
 
-#include <format>
 #include <memory>
 #include <optional>
 #include <string>
@@ -15,7 +15,7 @@
 #include "available_buffs.hpp"
 #include "environment_info.hpp"
 #include "game_statistics.hpp"
-#include "player_info.hpp"
+#include "player.hpp"
 
 namespace thuai8_agent {
 
@@ -28,28 +28,30 @@ class Agent {
   Agent(Agent&&) = delete;
   auto operator=(const Agent&) -> Agent& = delete;
   auto operator=(Agent&&) -> Agent& = delete;
-  ~Agent() = default;
 
-  void Connect(const std::string& server_address);
+  ~Agent();
+
+  void Connect(const std::string& server);
 
   [[nodiscard]] auto IsConnected() const -> bool {
     return ws_client_->isConnected();
   }
 
   [[nodiscard]] auto IsGameReady() const -> bool {
-    return self_info_.has_value() && opponent_info_.has_value() &&
-           game_statistics_.has_value() && environment_info_.has_value() &&
-           available_buffs_.has_value();
+    return players_info_.has_value() && game_statistics_.has_value() &&
+           environment_info_.has_value();
   }
 
   [[nodiscard]] auto token() const -> std::string_view { return token_; }
 
-  [[nodiscard]] auto self_info() const -> const PlayerInfo& {
-    return self_info_.value();
+  [[nodiscard]] auto self_info() const -> const Player& {
+    return players_info_.value().at(0).token == token_ ? players_info_->front()
+                                                       : players_info_->at(1);
   }
 
-  [[nodiscard]] auto opponent_info() const -> const PlayerInfo& {
-    return opponent_info_.value();
+  [[nodiscard]] auto opponent_info() const -> const Player& {
+    return players_info_.value().at(0).token == token_ ? players_info_->at(1)
+                                                       : players_info_->front();
   }
 
   [[nodiscard]] auto game_statistics() const -> const GameStatistics& {
@@ -64,13 +66,13 @@ class Agent {
     return available_buffs_.value();
   }
 
-  void MoveForward() const;
+  void MoveForward(float distance = MAX_MOVE_SPEED) const;
 
-  void MoveBackward() const;
+  void MoveBackward(float distance = MAX_MOVE_SPEED) const;
 
-  void TurnClockwise() const;
+  void TurnClockwise(int angle = MAX_TURN_SPEED) const;
 
-  void TurnCounterClockwise() const;
+  void TurnCounterClockwise(int angle = MAX_TURN_SPEED) const;
 
   void Attack() const;
 
@@ -78,17 +80,19 @@ class Agent {
 
   void SelectBuff(BuffKind buff) const;
 
+  static constexpr float MAX_MOVE_SPEED{1.0F};
+  static constexpr int MAX_TURN_SPEED{45};
+
  private:
-  void Loop();
+  void Loop() const;
   void OnMessage(std::string_view message);
 
-  std::string token_;
-  hv::EventLoopPtr event_loop_;
-  hv::TimerID timer_id_;
-  std::unique_ptr<hv::WebSocketClient> ws_client_;
+  const std::string token_;
+  const hv::EventLoopPtr event_loop_;
+  const std::unique_ptr<hv::WebSocketClient> ws_client_;
+  const hv::TimerID timer_id_{};
 
-  std::optional<PlayerInfo> self_info_;
-  std::optional<PlayerInfo> opponent_info_;
+  std::optional<Players> players_info_;
   std::optional<GameStatistics> game_statistics_;
   std::optional<EnvironmentInfo> environment_info_;
   std::optional<AvailableBuffs> available_buffs_;
@@ -97,10 +101,9 @@ class Agent {
 }  // namespace thuai8_agent
 
 template <>
-struct std::formatter<thuai8_agent::Agent> : std::formatter<string> {
-  template <class FormatContext>
-  auto format(const thuai8_agent::Agent& object, FormatContext& ctx) const {
-    return format_to(ctx.out(), "Agent[Token: {}]", object.token());
+struct fmt::formatter<thuai8_agent::Agent> : fmt::formatter<std::string> {
+  static auto format(const thuai8_agent::Agent& obj, format_context& ctx) {
+    return fmt::format_to(ctx.out(), "Agent[{}]", obj.token());
   }
 };
 

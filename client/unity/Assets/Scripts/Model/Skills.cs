@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using static BattleCity.Skills;
 
 
 namespace BattleCity
@@ -15,7 +16,7 @@ namespace BattleCity
             DESTROY,
             CONSTRUCT,
             TRAP,
-            MISSILE,
+            RECOVER,
             KAMUI
         }
 
@@ -43,27 +44,30 @@ namespace BattleCity
             skills = new List<Skill>();
         }
 
-        public void UpdateSkill(string skillName, int maxCooldown, int currentCooldown, bool isActive)
+        public bool UpdateSkill(string skillName, int maxCooldown, int currentCooldown, bool isActive)
         {
             if (!Enum.TryParse(typeof(SkillName), skillName, true, out var result))
             {
-                throw new ArgumentException($"Invalid skill name: {skillName}");
+                Debug.LogError("this skill is invaild: " + skillName);
+                return false; 
             }
             SkillName skillEnum = (SkillName)result;
-            Skill existingSkill = skills.Find(skill => skill.name == skillEnum);
+            Skill existingSkill = skills.Find(skill => skill.name.Equals(skillEnum));
             if (existingSkill != null)
             {
-                // ÕÒµ½¼¼ÄÜ£¬¸üÐÂÆäÊôÐÔ
+                // ï¿½Òµï¿½ï¿½ï¿½ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 existingSkill.maxCooldown = maxCooldown;
                 existingSkill.currentCooldown = currentCooldown;
                 existingSkill.isActive = isActive;
+                return true;
             }
             else
             {
-                // Ã»ÓÐÕÒµ½¼¼ÄÜ£¬Ìí¼ÓÒ»¸öÐÂµÄ¼¼ÄÜ
+                // Ã»ï¿½ï¿½ï¿½Òµï¿½ï¿½ï¿½ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ÂµÄ¼ï¿½ï¿½ï¿½
                 Skill newSkill = new Skill(skillEnum, maxCooldown, currentCooldown, isActive);
                 skills.Add(newSkill);
             }
+            return false;
         }
 
         

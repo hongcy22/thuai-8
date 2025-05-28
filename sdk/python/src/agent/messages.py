@@ -1,14 +1,4 @@
 import json
-from enum import Enum
-
-class RequestType(Enum):
-    SELF = "SELF"
-    OPPONENT = "OPPONENT"
-
-class Position:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
 
 
 class Message:
@@ -26,18 +16,23 @@ class Message:
 
 
 class MoveMessage(Message):
-    def __init__(self, token: str,target_distance: float):
+
+    def __init__(self, token: str, direction: str, distance: float):
         super().__init__()
         self.msg["messageType"] = "PERFORM_MOVE"
         self.msg["token"] = token
-        self.msg["distance"] = target_distance
+        self.msg["direction"] = direction
+        self.msg["distance"] = distance
+
 
 class TurnMessage(Message):
-    def __init__(self, token: str,target_angle: float):
+    def __init__(self, token: str, direction: str, angle: int):
         super().__init__()
         self.msg["messageType"] = "PERFORM_TURN"
         self.msg["token"] = token
-        self.msg["angle"] = target_angle
+        self.msg["direction"] = direction
+        self.msg["angle"] = angle
+
 
 class AttackMessage(Message):
     def __init__(self, token: str):
@@ -45,26 +40,29 @@ class AttackMessage(Message):
         self.msg["messageType"] = "PERFORM_ATTACK"
         self.msg["token"] = token
 
+
 class UseSkillMessage(Message):
     def __init__(self, token: str, skill_name: str):
         super().__init__()
-        self.msg["messageType"] = "PERFORM_USE_SKILL"
+        self.msg["messageType"] = "PERFORM_SKILL"
         self.msg["token"] = token
         self.msg["skillName"] = skill_name
 
-class SelectSkillMessage(Message):
-    def __init__(self, token: str, skill_name: str):
+
+class SelectBuffMessage(Message):
+    def __init__(self, token: str, buff_name: str):
         super().__init__()
-        self.msg["messageType"] = "SELECT_SKILL"
+        self.msg["messageType"] = "PERFORM_SELECT"
         self.msg["token"] = token
-        self.msg["skillName"] = skill_name
+        self.msg["buffName"] = buff_name
+
 
 class GetPlayerInfoMessage(Message):
-    def __init__(self, token: str, request: RequestType):
+    def __init__(self, token: str):
         super().__init__()
         self.msg["messageType"] = "GET_PLAYER_INFO"
         self.msg["token"] = token
-        self.msg["request"] = request.value
+        self.msg["request"] = "SELF"
 
 
 class GetEnvironmentInfoMessage(Message):
@@ -73,14 +71,16 @@ class GetEnvironmentInfoMessage(Message):
         self.msg["messageType"] = "GET_ENVIRONMENT_INFO"
         self.msg["token"] = token
 
+
 class GetGameStatisticsMessage(Message):
     def __init__(self, token: str):
         super().__init__()
         self.msg["messageType"] = "GET_GAME_STATISTICS"
         self.msg["token"] = token
 
+
 class GetAvailableBuffsMessage(Message):
     def __init__(self, token: str):
         super().__init__()
-        self.msg["messageType"] = "GET_AVAILABLE_SKILLS"
+        self.msg["messageType"] = "GET_AVAILABLE_BUFFS"
         self.msg["token"] = token
